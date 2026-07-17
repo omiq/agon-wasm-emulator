@@ -1,0 +1,16 @@
+# standalone crate — keep out of the repo's root workspace
+[workspace]
+
+[package]
+name = "agon-cpu-wasm"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+agon-ez80-emulator = { path = "../fab-agon-emulator/agon-ez80-emulator" }
+
+[profile.release]
+opt-level = 2

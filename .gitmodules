@@ -1,0 +1,3 @@
+[submodule "fab-agon-emulator"]
+	path = fab-agon-emulator
+	url = https://github.com/tomm/fab-agon-emulator.git

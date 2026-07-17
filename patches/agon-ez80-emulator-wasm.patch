@@ -1,0 +1,70 @@
+diff --git a/agon-ez80-emulator/Cargo.toml b/agon-ez80-emulator/Cargo.toml
+index 2ba70df..730bed7 100644
+--- a/agon-ez80-emulator/Cargo.toml
++++ b/agon-ez80-emulator/Cargo.toml
+@@ -10,7 +10,7 @@ license.workspace = true
+ [dependencies]
+ ez80 = { git = "https://github.com/tomm/ez80.git", rev="0cc736392919c647995c0ac6a153e4aaef56f3f2"}
+ #ez80 = { path = "../../ez80" }
+-rand = "*"
++rand = "0.8"
+ filetime = "0.2"
+ chrono = "0.4.38"
+ pico-args = "0.5.0"
+diff --git a/agon-ez80-emulator/src/agon_machine.rs b/agon-ez80-emulator/src/agon_machine.rs
+index fd26e5c..f704bfa 100644
+--- a/agon-ez80-emulator/src/agon_machine.rs
++++ b/agon-ez80-emulator/src/agon_machine.rs
+@@ -1619,6 +1619,43 @@ impl AgonMachine {
+         }
+     }
+ 
++    /// One-time setup for cooperative stepping (browser/wasm hosts that can't
++    /// block in start()). Mirrors the init part of start().
++    pub fn prepare(&mut self, cpu: &mut Cpu) {
++        match self.ram_init {
++            RamInit::Random => {
++                for i in 0..self.mem_external.len() {
++                    self.mem_external[i as usize] = rand::thread_rng().gen_range(0..=255);
++                }
++                for i in 0..ONCHIP_RAM_SIZE {
++                    self.mem_internal[i as usize] = rand::thread_rng().gen_range(0..=255);
++                }
++            }
++            RamInit::Zero => {}
++        }
++        self.load_mos();
++        cpu.state.set_pc(0);
++    }
++
++    /// Run approximately `cycles` clock cycles, then return. Mirrors the
++    /// inner timeslice loop of start(), without debugger or sleeping.
++    pub fn run_cycles(&mut self, cpu: &mut Cpu, cycles: u64) {
++        let mut cycle: u64 = 0;
++        while cycle < cycles {
++            self.execute_instruction(cpu);
++            if self.cycle_counter.get() >= self.interrupt_precision {
++                cycle += self.apply_elapsed_cycles() as u64;
++                self.do_interrupts(cpu);
++            }
++        }
++        if self.soft_reset.load(std::sync::atomic::Ordering::Relaxed) {
++            cpu.state.reg.adl = true;
++            cpu.state.set_pc(0);
++            self.soft_reset
++                .store(false, std::sync::atomic::Ordering::Relaxed);
++        }
++    }
++
+     pub fn start(&mut self, debugger_con: Option<debugger::DebuggerConnection>) {
+         let mut cpu = Cpu::new_ez80();
+         let mut debugger = if debugger_con.is_some() {
+diff --git a/agon-ez80-emulator/src/lib.rs b/agon-ez80-emulator/src/lib.rs
+index 3d06c2f..ff6d05e 100644
+--- a/agon-ez80-emulator/src/lib.rs
++++ b/agon-ez80-emulator/src/lib.rs
+@@ -13,3 +13,4 @@ pub use agon_machine::AgonMachineConfig;
+ pub use agon_machine::RamInit;
+ pub use gpio_video::GpioVgaFrame;
+ pub use uart::SerialLink;
++pub use ez80;
