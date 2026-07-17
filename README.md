@@ -1,19 +1,19 @@
 # Agon WASM Emulator
 
-An Agon Light / Agon Console8 emulator that runs entirely in the browser. This is a WebAssembly port of Tom Morton's excellent [fab-agon-emulator](https://github.com/tomm/fab-agon-emulator), which does all the heavy lifting here: its Rust eZ80 core and its C++ VDP firmware both compile to wasm with only small changes.
+An Agon Light / Agon Console8 emulator that runs entirely in the browser. This is a WebAssembly port of Tom Morton's excellent [fab-agon-emulator](https://github.com/tomm/fab-agon-emulator), which does the heavy lifting here: its Rust eZ80 core and its C++ VDP firmware both compile to wasm with only small changes.
 
-MOS boots to the familiar prompt, the keyboard works, and BBC BASIC loads and runs programs from an emulated SD card, all in a browser tab with no install.
+MOS boots to the prompt, the keyboard works, and BBC BASIC loads and runs programs from an emulated SD card, in a browser with no setup/install.
 
-Built so the [Online Retro IDE](https://ide.retrogamecoders.com) can target the Agon, but it stands alone as a plain web page too.
+Built so the [Online Retro IDE](https://ide.retrogamecoders.com) can target the Agon, but it stands alone as a plain web site.
 
 ## How it works
 
-Two WebAssembly modules run side by side on the page, mirroring the two chips in the real machine:
+Two WebAssembly modules run on the page, mirroring the chips in the real machine:
 
 * `vdp.wasm` is the C++ VDP firmware (agon-vdp running on vdp-gl, the userspace FabGL fork). It spawns real threads, so it is compiled with Emscripten pthreads and the page must be served with cross-origin isolation headers (see below).
-* `cpu.wasm` is the Rust eZ80 CPU and machine emulation from fab-agon-emulator, compiled single threaded with the stable Rust toolchain and stepped from `requestAnimationFrame`.
+* `cpu.wasm` is the Rust eZ80 CPU and machine emulation from fab-agon-emulator, compiled single threaded with the Rust toolchain and stepped from `requestAnimationFrame`.
 
-On real hardware the two processors talk over a serial UART. Here that link is a few lines of JavaScript passing bytes between the two modules (`uart_lib.js` plus the glue in `index.html`). The MOS firmware and the SD card contents live in Emscripten's in-memory filesystem, so the host page can drop files onto the card with a single `FS.writeFile` call. That is the hook the IDE uses to inject programs.
+On real hardware the two processors talk over a serial UART. Here that link is a few lines of JavaScript passing bytes between the two modules (`uart_lib.js` plus the glue in `index.html`). The MOS firmware and the SD card contents live in Emscripten's in-memory filesystem, so the host page can drop files onto the card with a single `FS.writeFile` call. That is how the IDE uses to execute cimpiled programs.
 
 ## Building
 
@@ -31,20 +31,20 @@ source ~/emsdk/emsdk_env.sh
 python3 serve.py
 ```
 
-Open http://127.0.0.1:8842/ , click the screen, and type:
+Open http://127.0.0.1:8842/ , click the screen, and enter:
 
 ```
 dir
 bin/bbcbasic demos/fireworks.bas
 ```
 
-`build.sh` applies a small patch (in `patches/`) to the fab-agon-emulator submodule. It adds a cooperative stepping API to the AgonMachine struct so the CPU can be driven from the browser's frame loop instead of a blocking thread. Nothing else in upstream is modified.
+`build.sh` applies a patch (in `patches/`) to the fab-agon-emulator submodule. It adds a cooperative stepping API to the AgonMachine struct so the CPU can be driven from the browser's frame loop instead of a blocking thread. Nothing else in upstream is modified.
 
 A note on hosting: the VDP module uses pthreads, which need `SharedArrayBuffer`, which browsers only allow on cross-origin isolated pages. `serve.py` sends the required `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers for local use. If you host this anywhere else, your server must send the same two headers.
 
 ## Embedding in another page (IDE use)
 
-`embed.html` is a minimal full-window build of the emulator with a postMessage API, made for iframes. `ide-demo.html` is a working example of the flow: edit a BBC BASIC program in a textarea, click run, and it executes in the emulator beside it.
+`embed.html` is a minimal build of the emulator with a postMessage API, made for iframes. `ide-demo.html` is a working example of the flow. edit a BBC BASIC program in a textarea, click run, and it executes in the emulator next to it.
 
 ```
 <iframe id="emu" src="embed.html"></iframe>
