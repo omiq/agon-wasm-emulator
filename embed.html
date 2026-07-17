@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Agon emulator</title>
+<style>
+  html, body { margin:0; padding:0; background:#000; height:100%; overflow:hidden; }
+  canvas { display:block; width:100vw; height:100vh; object-fit:contain; image-rendering:pixelated; }
+</style>
+</head>
+<body>
+<canvas id="screen" width="640" height="480" tabindex="0"></canvas>
+
+<script src="vdp.js"></script>
+<script src="cpu.js"></script>
+<script src="agon-emulator.js"></script>
+<script>
+// Embeddable Agon emulator with a postMessage API for IDE hosts.
+//
+// IMPORTANT: SharedArrayBuffer rules mean the TOP-LEVEL page (the IDE, not
+// just this iframe) must be served with:
+//   Cross-Origin-Opener-Policy: same-origin
+//   Cross-Origin-Embedder-Policy: require-corp
+//
+// Messages accepted (post to the iframe's contentWindow):
+//   {type:'agon-files', files:[{path:'demos/prog.bas', data:<ArrayBuffer|Uint8Array|string>}]}
+//   {type:'agon-type',  text:'bin/bbcbasic demos/prog.bas\r'}
+//   {type:'agon-run',   files:[...], command:'bin/bbcbasic demos/prog.bas'}
+// Messages sent to the parent:
+//   {type:'agon-ready'}    modules loaded, MOS booting, input can be queued
+//   {type:'agon-log', msg} status lines
+
+let agon = null;
+const pending = [];
+const enc = new TextEncoder();
+// strings are treated as text: normalise to CRLF, which BBC BASIC's
+// text loader expects (LF-only files give "Bad program")
+const toBytes = d =>
+  typeof d === 'string' ? enc.encode(d.replace(/\r?\n/g, '\r\n')) :
+  d instanceof ArrayBuffer ? new Uint8Array(d) : d;
+
+function handle(msg) {
+  if (msg.type === 'agon-files' || msg.type === 'agon-run') {
+    for (const f of (msg.files || [])) agon.writeFile(f.path, toBytes(f.data));
+  }
+  if (msg.type === 'agon-type') agon.typeText(msg.text);
+  if (msg.type === 'agon-run' && msg.command) agon.typeText(msg.command + '\r');
+}
+
+window.addEventListener('message', e => {
+  if (!e.data || typeof e.data.type !== 'string' || !e.data.type.startsWith('agon-')) return;
+  if (agon) handle(e.data); else pending.push(e.data);
+});
+
+const canvas = document.getElementById('screen');
+canvas.addEventListener('click', () => canvas.focus());
+
+startAgon({
+  canvas,
+  sdFiles: [
+    { path: 'bin/bbcbasic.bin', url: 'fab-agon-emulator/sdcard/bin/bbcbasic.bin' },
+  ],
+  onLog: msg => parent.postMessage({ type: 'agon-log', msg }, '*'),
+}).then(api => {
+  agon = api;
+  // give MOS a moment to reach the prompt before queued input replays
+  setTimeout(() => {
+    for (const msg of pending) handle(msg);
+    pending.length = 0;
+    parent.postMessage({ type: 'agon-ready' }, '*');
+  }, 1500);
+}).catch(e => parent.postMessage({ type: 'agon-log', msg: 'FATAL: ' + e.message }, '*'));
+</script>
+</body>
+</html>

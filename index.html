@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Agon emulator wasm prototype</title>
+<title>Agon emulator wasm</title>
 <style>
   body { background:#222; color:#ddd; font-family:monospace; text-align:center; }
   canvas { border:2px solid #555; image-rendering:pixelated; background:#000; }
@@ -16,129 +16,26 @@
 
 <script src="vdp.js"></script>
 <script src="cpu.js"></script>
+<script src="agon-emulator.js"></script>
 <script>
 const logEl = document.getElementById('log');
 const log = m => { logEl.textContent += m + '\n'; console.log(m); };
-
 const canvas = document.getElementById('screen');
-const ctx = canvas.getContext('2d');
-let img = null, imgW = 0, imgH = 0;
 
-// KeyboardEvent.code -> PS/2 scancode set 2 make code (0xE0xx = extended)
-const PS2 = {
-  KeyA:0x1C, KeyB:0x32, KeyC:0x21, KeyD:0x23, KeyE:0x24, KeyF:0x2B, KeyG:0x34,
-  KeyH:0x33, KeyI:0x43, KeyJ:0x3B, KeyK:0x42, KeyL:0x4B, KeyM:0x3A, KeyN:0x31,
-  KeyO:0x44, KeyP:0x4D, KeyQ:0x15, KeyR:0x2D, KeyS:0x1B, KeyT:0x2C, KeyU:0x3C,
-  KeyV:0x2A, KeyW:0x1D, KeyX:0x22, KeyY:0x35, KeyZ:0x1A,
-  Digit1:0x16, Digit2:0x1E, Digit3:0x26, Digit4:0x25, Digit5:0x2E,
-  Digit6:0x36, Digit7:0x3D, Digit8:0x3E, Digit9:0x46, Digit0:0x45,
-  Enter:0x5A, Space:0x29, Backspace:0x66, Tab:0x0D, Escape:0x76,
-  Minus:0x4E, Equal:0x55, BracketLeft:0x54, BracketRight:0x5B,
-  Backslash:0x5D, Semicolon:0x4C, Quote:0x52, Backquote:0x0E,
-  Comma:0x41, Period:0x49, Slash:0x4A, CapsLock:0x58,
-  ShiftLeft:0x12, ShiftRight:0x59, ControlLeft:0x14, AltLeft:0x11,
-  F1:0x05, F2:0x06, F3:0x04, F4:0x0C, F5:0x03, F6:0x0B, F7:0x83, F8:0x0A,
-  F9:0x01, F10:0x09, F11:0x78, F12:0x07,
-  ControlRight:0xE014, AltRight:0xE011, Insert:0xE070, Delete:0xE071,
-  Home:0xE06C, End:0xE069, PageUp:0xE07D, PageDown:0xE07A,
-  ArrowLeft:0xE06B, ArrowRight:0xE074, ArrowUp:0xE075, ArrowDown:0xE072,
-};
-
-async function fetchBytes(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error('fetch failed: ' + url);
-  return new Uint8Array(await r.arrayBuffer());
-}
-
-// Files copied from the emulated sdcard into MEMFS (path on card -> url)
-const SDCARD_FILES = [
-  'bin/bbcbasic.bin',
-  'demos/fireworks.bas',
-  'demos/cube.bas',
-  'demos/life_2.bas',
-];
-
-async function main() {
-  log('loading VDP module...');
-  const vdp = await createVDP();
-  log('booting VDP...');
-  vdp._web_boot();
-
-  // UART bridge: CPU module's extern "C" imports land here
-  const stats = { toVdp: 0, fromVdp: 0, frames: 0, keys: 0 };
-  globalThis.__agon_uart = {
-    send: b => { stats.toVdp++; vdp._web_send(b); },
-    recv: () => { const v = vdp._web_recv(); if (v >= 0) stats.fromVdp++; return v; },
-    cts:  () => vdp._web_cts(),
-  };
-  setInterval(() => console.log('[stats] ' + JSON.stringify(stats)), 2000);
-
-  log('loading CPU module...');
-  const cpu = await createCPU();
-  globalThis.vdp = vdp; globalThis.cpu = cpu;
-
-  log('fetching MOS firmware + sdcard files...');
-  const mos = await fetchBytes('/fab-agon-emulator/firmware/mos_console8.bin');
-  cpu.FS.writeFile('/mos.bin', mos);
-  // hostfs (sdcard-as-directory) hooks FatFS via the MOS symbol map
-  cpu.FS.writeFile('/mos.map', await fetchBytes('/fab-agon-emulator/firmware/mos_console8.map'));
-  for (const d of ['/sdcard', '/sdcard/bin', '/sdcard/demos']) {
-    try { cpu.FS.mkdir(d); } catch (e) { /* exists */ }
-  }
-  for (const f of SDCARD_FILES) {
-    cpu.FS.writeFile('/sdcard/' + f, await fetchBytes('/fab-agon-emulator/sdcard/' + f));
-  }
-  log('sdcard: ' + SDCARD_FILES.join(', '));
-
-  cpu._agon_cpu_init(512);
-  log('eZ80 up (18.432MHz, 512KiB RAM). MOS booting...');
-
-  // keyboard -> PS/2 into the VDP
-  canvas.addEventListener('keydown', e => {
-    const c = PS2[e.code]; if (c === undefined) return;
-    e.preventDefault(); stats.keys++; vdp._web_key(c, 1);
-  });
-  canvas.addEventListener('keyup', e => {
-    const c = PS2[e.code]; if (c === undefined) return;
-    e.preventDefault(); vdp._web_key(c, 0);
-  });
+startAgon({
+  canvas,
+  sdFiles: [
+    { path: 'bin/bbcbasic.bin', url: 'fab-agon-emulator/sdcard/bin/bbcbasic.bin' },
+    { path: 'demos/fireworks.bas', url: 'fab-agon-emulator/sdcard/demos/fireworks.bas' },
+    { path: 'demos/cube.bas', url: 'fab-agon-emulator/sdcard/demos/cube.bas' },
+    { path: 'demos/life_2.bas', url: 'fab-agon-emulator/sdcard/demos/life_2.bas' },
+  ],
+  onLog: log,
+}).then(api => {
+  globalThis.agon = api;
   canvas.focus();
-  log('click the screen to type');
-
-  let last = performance.now();
-  function frame(now) {
-    // run emulated time = real elapsed time, capped to avoid death spirals
-    let ms = Math.min(Math.round(now - last), 30);
-    last = now;
-    cpu._agon_cpu_vsync();   // 60Hz vsync heartbeat, like the desktop render loop
-    if (ms > 0) cpu._agon_cpu_run_ms(ms);
-    stats.frames++;
-
-    vdp._web_vblank();
-    vdp._web_frame();
-    const w = vdp._web_w(), h = vdp._web_h();
-    if (w > 0 && h > 0) {
-      if (w !== imgW || h !== imgH) {
-        imgW = w; imgH = h;
-        canvas.width = w; canvas.height = h;
-        img = ctx.createImageData(w, h);
-        log('video mode: ' + w + 'x' + h + ' @ ' + vdp._web_hz().toFixed(1) + 'Hz');
-      }
-      const ptr = vdp._web_fb();
-      const rgb = vdp.HEAPU8.subarray(ptr, ptr + w * h * 3);
-      const d = img.data;
-      let s = 0, o = 0;
-      for (let i = 0; i < w * h; i++) {
-        d[o++] = rgb[s++]; d[o++] = rgb[s++]; d[o++] = rgb[s++]; d[o++] = 255;
-      }
-      ctx.putImageData(img, 0, 0);
-    }
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
-}
-
-main().catch(e => log('FATAL: ' + (e && (e.message || e.stack || String(e)))));
+  log('click the screen to type. try: bin/bbcbasic demos/fireworks.bas');
+}).catch(e => log('FATAL: ' + (e && (e.message || String(e)))));
 </script>
 </body>
 </html>

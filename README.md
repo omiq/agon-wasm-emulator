@@ -42,9 +42,33 @@ bin/bbcbasic demos/fireworks.bas
 
 A note on hosting: the VDP module uses pthreads, which need `SharedArrayBuffer`, which browsers only allow on cross-origin isolated pages. `serve.py` sends the required `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers for local use. If you host this anywhere else, your server must send the same two headers.
 
+## Embedding in another page (IDE use)
+
+`embed.html` is a minimal full-window build of the emulator with a postMessage API, made for iframes. `ide-demo.html` is a working example of the flow: edit a BBC BASIC program in a textarea, click run, and it executes in the emulator beside it.
+
+```
+<iframe id="emu" src="embed.html"></iframe>
+<script>
+  document.getElementById('emu').contentWindow.postMessage({
+    type: 'agon-run',
+    files: [{ path: 'demos/prog.bas', data: sourceText }],
+    command: 'bin/bbcbasic demos/prog.bas',
+  }, '*');
+</script>
+```
+
+Messages accepted: `agon-files` (write files to the sdcard), `agon-type` (type text at the prompt, `\r` for Enter), and `agon-run` (both at once). The embed replies with `agon-ready` when MOS is up and `agon-log` status lines. String file data is normalised to CRLF line endings, which BBC BASIC's text loader requires. Messages sent before boot completes are queued and replayed.
+
+Two things the host page must get right:
+
+* The top-level document (not just the iframe) must be served with the `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers, because `SharedArrayBuffer` only exists on cross-origin isolated pages and isolation is decided at the top level.
+* The emulator boots with the Agon Platform firmware (MOS 3.0.2 at the time of writing), the current mainline. The other firmware variants in the fab-agon-emulator submodule (console8, quark, electron) can be swapped in by changing the two fetches in `agon-emulator.js`.
+
+Emulation is driven by a timer rather than `requestAnimationFrame`, so the machine keeps running when the page or iframe is scrolled offscreen or occluded (Chrome stops rAF entirely for hidden content; timers it merely throttles).
+
 ## Status
 
-Working prototype, warts and all. What works: MOS 2.3.3 boot, keyboard input, the SD card as a fetched-into-memory directory, BBC BASIC and the graphics demos from the standard card. Not wired up yet: audio (the export exists on the VDP module, it needs a WebAudio worklet), mouse, joysticks, and most of the desktop emulator's command line options.
+Working prototype, warts and all. What works: Agon Platform MOS 3.0.2 boot, keyboard input, the SD card as a fetched-into-memory directory, BBC BASIC and the graphics demos from the standard card. Not wired up yet: audio (the export exists on the VDP module, it needs a WebAudio worklet), mouse, joysticks, and most of the desktop emulator's command line options.
 
 ## License and credits
 
