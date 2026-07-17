@@ -17,11 +17,15 @@ cd "$(dirname "$0")"
 FAB=fab-agon-emulator
 VDP=$FAB/src/vdp
 
-# upstream needs a small patch (cooperative stepping API on AgonMachine);
-# apply once, skip when already applied
+# upstream needs two small patches (cooperative stepping API on AgonMachine,
+# and a browser-friendly idle sleep in the VDP); apply once, skip when present
 if ! grep -q "pub fn run_cycles" $FAB/agon-ez80-emulator/src/agon_machine.rs; then
   echo "=== applying patch to $FAB ==="
   git -C $FAB apply ../patches/agon-ez80-emulator-wasm.patch
+fi
+if ! grep -q "milliseconds(1)" $FAB/src/vdp/vdp-console8/video/video.ino; then
+  echo "=== applying patch to vdp-console8 ==="
+  git -C $FAB/src/vdp/vdp-console8 apply ../../../../patches/vdp-console8-wasm.patch
 fi
 
 INCLUDES="-I$FAB/src -I$VDP -I$VDP/userspace-vdp-gl/src \
@@ -52,7 +56,7 @@ echo "=== 4/4 CPU module (Rust eZ80 + MOS) ==="
 em++ -O2 -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=64MB -sSTACK_SIZE=4MB \
   -sEXIT_RUNTIME=0 -sINVOKE_RUN=0 -sENVIRONMENT=web \
   -sMODULARIZE -sEXPORT_NAME=createCPU -sFORCE_FILESYSTEM \
-  -sEXPORTED_FUNCTIONS='_agon_cpu_init,_agon_cpu_run_ms' \
+  -sEXPORTED_FUNCTIONS='_agon_cpu_init,_agon_cpu_run_ms,_agon_cpu_vsync,_agon_cpu_pc' \
   -sEXPORTED_RUNTIME_METHODS='FS,HEAPU8' \
   --js-library uart_lib.js \
   agon-cpu-wasm/target/wasm32-unknown-emscripten/release/libagon_cpu_wasm.a \

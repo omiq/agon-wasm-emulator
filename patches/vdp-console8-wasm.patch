@@ -1,0 +1,15 @@
+diff --git a/video/video.ino b/video/video.ino
+index 1ae460a..560e722 100644
+--- a/video/video.ino
++++ b/video/video.ino
+@@ -135,7 +135,9 @@ void processLoop(void * parameter) {
+ 	while (true) {
+ #ifdef USERSPACE
+  		if (!VDPSerial.available()) {
+-			std::this_thread::sleep_for(std::chrono::microseconds(8));
++			// 8us here works natively, but the huge futex-wait rate wedges
++			// the worker under emscripten; 1ms is plenty for a 1.1Mbaud UART
++			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+ 		}
+ #endif /* USERSPACE */
+ 

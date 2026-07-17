@@ -65,14 +65,17 @@ async function main() {
   vdp._web_boot();
 
   // UART bridge: CPU module's extern "C" imports land here
+  const stats = { toVdp: 0, fromVdp: 0, frames: 0, keys: 0 };
   globalThis.__agon_uart = {
-    send: b => vdp._web_send(b),
-    recv: () => vdp._web_recv(),
+    send: b => { stats.toVdp++; vdp._web_send(b); },
+    recv: () => { const v = vdp._web_recv(); if (v >= 0) stats.fromVdp++; return v; },
     cts:  () => vdp._web_cts(),
   };
+  setInterval(() => console.log('[stats] ' + JSON.stringify(stats)), 2000);
 
   log('loading CPU module...');
   const cpu = await createCPU();
+  globalThis.vdp = vdp; globalThis.cpu = cpu;
 
   log('fetching MOS firmware + sdcard files...');
   const mos = await fetchBytes('/fab-agon-emulator/firmware/mos_console8.bin');
@@ -93,7 +96,7 @@ async function main() {
   // keyboard -> PS/2 into the VDP
   canvas.addEventListener('keydown', e => {
     const c = PS2[e.code]; if (c === undefined) return;
-    e.preventDefault(); vdp._web_key(c, 1);
+    e.preventDefault(); stats.keys++; vdp._web_key(c, 1);
   });
   canvas.addEventListener('keyup', e => {
     const c = PS2[e.code]; if (c === undefined) return;
@@ -107,7 +110,9 @@ async function main() {
     // run emulated time = real elapsed time, capped to avoid death spirals
     let ms = Math.min(Math.round(now - last), 30);
     last = now;
+    cpu._agon_cpu_vsync();   // 60Hz vsync heartbeat, like the desktop render loop
     if (ms > 0) cpu._agon_cpu_run_ms(ms);
+    stats.frames++;
 
     vdp._web_vblank();
     vdp._web_frame();

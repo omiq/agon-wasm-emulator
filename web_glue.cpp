@@ -3,6 +3,9 @@
 // the VDP firmware and read whatever it draws (the Agon boot screen).
 #include <cstdint>
 #include <cstring>
+#include <mutex>
+#include <thread>
+#include <atomic>
 
 extern "C" void vdp_setup();
 extern "C" void signal_vblank();
@@ -32,3 +35,4 @@ extern "C" void  web_key(uint16_t ps2, uint8_t down) { sendPS2KbEventToFabgl(ps2
 
 static uint8_t g_audio[2048];
 extern "C" uint8_t *web_audio(uint32_t n) { getAudioSamples(g_audio, n > 2048 ? 2048 : n); return g_audio; }
+

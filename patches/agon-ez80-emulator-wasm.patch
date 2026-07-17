@@ -12,10 +12,10 @@ index 2ba70df..730bed7 100644
  chrono = "0.4.38"
  pico-args = "0.5.0"
 diff --git a/agon-ez80-emulator/src/agon_machine.rs b/agon-ez80-emulator/src/agon_machine.rs
-index fd26e5c..f704bfa 100644
+index fd26e5c..8214e57 100644
 --- a/agon-ez80-emulator/src/agon_machine.rs
 +++ b/agon-ez80-emulator/src/agon_machine.rs
-@@ -1619,6 +1619,43 @@ impl AgonMachine {
+@@ -1619,6 +1619,50 @@ impl AgonMachine {
          }
      }
  
@@ -43,6 +43,13 @@ index fd26e5c..f704bfa 100644
 +        let mut cycle: u64 = 0;
 +        while cycle < cycles {
 +            self.execute_instruction(cpu);
++            if cpu.is_halted() {
++                // a halted cpu consumes no cycles, which would freeze the
++                // timers and uarts and make wake-up impossible: advance
++                // emulated time manually while asleep
++                self.cycle_counter
++                    .set(self.cycle_counter.get() + self.interrupt_precision);
++            }
 +            if self.cycle_counter.get() >= self.interrupt_precision {
 +                cycle += self.apply_elapsed_cycles() as u64;
 +                self.do_interrupts(cpu);

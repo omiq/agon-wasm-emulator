@@ -45,6 +45,7 @@ impl SerialLink for DummyLink {
 struct EmuState {
     machine: AgonMachine,
     cpu: Cpu,
+    gpios: Arc<gpio::GpioSet>,
     _rx_frame: std::sync::mpsc::Receiver<agon_ez80_emulator::GpioVgaFrame>,
 }
 
@@ -54,11 +55,12 @@ static mut STATE: Option<EmuState> = None;
 #[no_mangle]
 pub extern "C" fn agon_cpu_init(ram_size_kib: u32) {
     let (tx_frame, rx_frame) = std::sync::mpsc::channel();
+    let gpios = Arc::new(gpio::GpioSet::new());
     let mut machine = AgonMachine::new(AgonMachineConfig {
         ram_init: RamInit::Zero,
         uart0_link: Box::new(JsVdpLink),
         uart1_link: Box::new(DummyLink),
-        gpios: Arc::new(gpio::GpioSet::new()),
+        gpios: gpios.clone(),
         soft_reset: Arc::new(AtomicBool::new(false)),
         emulator_shutdown: Arc::new(AtomicBool::new(false)),
         exit_status: Arc::new(AtomicI32::new(0)),
@@ -77,6 +79,7 @@ pub extern "C" fn agon_cpu_init(ram_size_kib: u32) {
         STATE = Some(EmuState {
             machine,
             cpu,
+            gpios,
             _rx_frame: rx_frame,
         });
     }
@@ -93,4 +96,26 @@ pub extern "C" fn agon_cpu_run_ms(ms: u32) {
     };
     let cycles = 18_432_000u64 / 1000 * ms as u64;
     st.machine.run_cycles(&mut st.cpu, cycles);
+}
+
+#[no_mangle]
+pub extern "C" fn agon_cpu_pc() -> u32 {
+    unsafe {
+        match &*std::ptr::addr_of!(STATE) {
+            Some(st) => st.cpu.state.pc(),
+            None => 0,
+        }
+    }
+}
+
+/// Pulse the vsync GPIO (port B pin 1), as the desktop render loop does each
+/// frame. MOS and BBC BASIC block in HALT waiting for this interrupt.
+#[no_mangle]
+pub extern "C" fn agon_cpu_vsync() {
+    unsafe {
+        if let Some(st) = &*std::ptr::addr_of!(STATE) {
+            st.gpios.b.set_input_pin(1, true);
+            st.gpios.b.set_input_pin(1, false);
+        }
+    }
 }
