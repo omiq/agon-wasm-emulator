@@ -7,6 +7,10 @@
 //   baseUrl  : prefix for firmware/sdcard fetches (default: 'fab-agon-emulator')
 //   jsBase   : prefix for the vdp.js script fetch (default: '', i.e. alongside
 //              the page) — must match the <script src> that loaded vdp.js
+//   assetVer : cache-buster appended as ?v=<assetVer> to every asset fetch
+//              (wasm, worker script, firmware) — without it, CDNs and the
+//              browser HTTP cache happily serve a stale module set after a
+//              redeploy (optional)
 //   sdFiles  : [{path, url}] fetched onto the sdcard at boot (optional)
 //   onLog    : function(msg) for status lines (optional)
 //   onReady  : called once MOS is booting and input can be queued (optional)
@@ -77,6 +81,8 @@ async function fetchBytes(url) {
 async function startAgon(opts) {
   const canvas = opts.canvas;
   const base = opts.baseUrl !== undefined ? opts.baseUrl : 'fab-agon-emulator';
+  const jsBase = opts.jsBase !== undefined ? opts.jsBase : '';
+  const ver = opts.assetVer ? '?v=' + opts.assetVer : '';
   const log = opts.onLog || (() => {});
   const ctx = canvas.getContext('2d');
   let img = null, imgW = 0, imgH = 0;
@@ -89,10 +95,12 @@ async function startAgon(opts) {
   // A blob: URL inherits the creating document's policy, so feeding the
   // script to emscripten as a Blob makes worker spawning independent of
   // server header config. Falls back to the default spawn if the fetch fails.
-  const vdpArg = {};
+  // locateFile routes the emscripten-side wasm fetches through the same
+  // versioned URLs, so a redeploy can never pair a fresh .js with a stale
+  // CDN-cached .wasm
+  const vdpArg = { locateFile: f => jsBase + f + ver };
   try {
-    const jsBase = opts.jsBase !== undefined ? opts.jsBase : '';
-    const r = await fetch(jsBase + 'vdp.js');
+    const r = await fetch(jsBase + 'vdp.js' + ver);
     if (r.ok) vdpArg.mainScriptUrlOrBlob = new Blob([await r.text()], { type: 'text/javascript' });
   } catch (e) { /* same-origin fetch failed; let emscripten try its default */ }
   const vdp = await createVDP(vdpArg);
@@ -109,11 +117,11 @@ async function startAgon(opts) {
   };
 
   log('loading CPU module...');
-  const cpu = await createCPU();
+  const cpu = await createCPU({ locateFile: f => jsBase + f + ver });
 
   log('fetching MOS firmware...');
-  cpu.FS.writeFile('/mos.bin', await fetchBytes(base + '/firmware/mos_platform.bin'));
-  cpu.FS.writeFile('/mos.map', await fetchBytes(base + '/firmware/mos_platform.map'));
+  cpu.FS.writeFile('/mos.bin', await fetchBytes(base + '/firmware/mos_platform.bin' + ver));
+  cpu.FS.writeFile('/mos.map', await fetchBytes(base + '/firmware/mos_platform.map' + ver));
 
   const mkdirs = path => {
     const parts = path.split('/').filter(Boolean).slice(0, -1);
