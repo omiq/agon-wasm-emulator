@@ -2,9 +2,11 @@
 // wires the UART bridge and keyboard, and exposes a small API for hosts
 // (the standalone page and the iframe embed both use this).
 //
-// startAgon({canvas, baseUrl, sdFiles, onLog, onReady}) -> Promise<api>
+// startAgon({canvas, baseUrl, jsBase, sdFiles, onLog, onReady}) -> Promise<api>
 //   canvas   : the <canvas> to render into (also receives keyboard focus)
 //   baseUrl  : prefix for firmware/sdcard fetches (default: 'fab-agon-emulator')
+//   jsBase   : prefix for the vdp.js script fetch (default: '', i.e. alongside
+//              the page) — must match the <script src> that loaded vdp.js
 //   sdFiles  : [{path, url}] fetched onto the sdcard at boot (optional)
 //   onLog    : function(msg) for status lines (optional)
 //   onReady  : called once MOS is booting and input can be queued (optional)
@@ -72,7 +74,20 @@ async function startAgon(opts) {
   let img = null, imgW = 0, imgH = 0;
 
   log('loading VDP module...');
-  const vdp = await createVDP();
+  // The VDP is a pthreads build: it spawns dedicated workers from its own
+  // script URL. Under COEP: require-corp (which SharedArrayBuffer forces on
+  // the page) a worker SCRIPT response must itself carry COEP headers, and
+  // static file servers usually don't send them -> "worker sent an error!".
+  // A blob: URL inherits the creating document's policy, so feeding the
+  // script to emscripten as a Blob makes worker spawning independent of
+  // server header config. Falls back to the default spawn if the fetch fails.
+  const vdpArg = {};
+  try {
+    const jsBase = opts.jsBase !== undefined ? opts.jsBase : '';
+    const r = await fetch(jsBase + 'vdp.js');
+    if (r.ok) vdpArg.mainScriptUrlOrBlob = new Blob([await r.text()], { type: 'text/javascript' });
+  } catch (e) { /* same-origin fetch failed; let emscripten try its default */ }
+  const vdp = await createVDP(vdpArg);
   vdp._web_boot();
 
   globalThis.__agon_uart = {
