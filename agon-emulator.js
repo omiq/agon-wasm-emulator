@@ -10,6 +10,7 @@
 //   sdFiles  : [{path, url}] fetched onto the sdcard at boot (optional)
 //   onLog    : function(msg) for status lines (optional)
 //   onReady  : called once MOS is booting and input can be queued (optional)
+//   onUartTx : function(byte) for every CPU->VDP byte (optional; prompt detection)
 // api:
 //   writeFile(path, bytes) : put a Uint8Array onto the emulated sdcard
 //   typeText(text)         : queue text to be typed (use \r for Enter)
@@ -90,8 +91,12 @@ async function startAgon(opts) {
   const vdp = await createVDP(vdpArg);
   vdp._web_boot();
 
+  // onUartTx (optional) sees every byte the CPU sends to the VDP — hosts use
+  // it to detect real boot progress (e.g. the first '*' of the MOS prompt)
+  // instead of guessing with wall-clock delays, which break badly when the
+  // page is occluded and timers throttle to ~1Hz (MOS runs at ~3% speed).
   globalThis.__agon_uart = {
-    send: b => vdp._web_send(b),
+    send: b => { if (opts.onUartTx) opts.onUartTx(b); vdp._web_send(b); },
     recv: () => vdp._web_recv(),
     cts:  () => vdp._web_cts(),
   };
@@ -154,11 +159,12 @@ async function startAgon(opts) {
   // scrolled offscreen in an IDE), which would freeze the machine. Timers
   // keep firing (throttled to ~1Hz when hidden), so the emulator survives.
   let last = performance.now();
-  let typeCooldown = 0;
+  let keyAccum = 0;
   let vsyncAccum = 0;
   setInterval(() => {
     const now = performance.now();
-    const ms = Math.min(Math.round(now - last), 30);
+    const rawMs = now - last;
+    const ms = Math.min(Math.round(rawMs), 30);
     last = now;
 
     // ~60Hz vsync heartbeat, independent of tick rate
@@ -167,10 +173,20 @@ async function startAgon(opts) {
 
     if (ms > 0) cpu._agon_cpu_run_ms(ms);
 
-    if (typeQueue.length && --typeCooldown <= 0) {
-      const [code, down] = typeQueue.shift();
-      vdp._web_key(code, down);
-      typeCooldown = 4; // ~32ms between key events
+    // auto-typing: pace by WALL CLOCK (one key event per ~32ms), not by tick
+    // count — when the page is occluded, ticks throttle to ~1Hz and a
+    // tick-counted cooldown stretches to seconds per key. Budgeting on rawMs
+    // lets throttled ticks send a small burst (capped; the VDP keyboard
+    // queue and MOS line buffer absorb it) so typing finishes regardless.
+    if (typeQueue.length) {
+      keyAccum = Math.min(keyAccum + rawMs, 8 * 32);
+      while (typeQueue.length && keyAccum >= 32) {
+        keyAccum -= 32;
+        const [code, down] = typeQueue.shift();
+        vdp._web_key(code, down);
+      }
+    } else {
+      keyAccum = 0;
     }
     vdp._web_vblank();
   }, 8);
