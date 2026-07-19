@@ -12,9 +12,16 @@
 //   onReady  : called once MOS is booting and input can be queued (optional)
 //   onUartTx : function(byte) for every CPU->VDP byte (optional; prompt detection)
 // api:
-//   writeFile(path, bytes) : put a Uint8Array onto the emulated sdcard
-//   typeText(text)         : queue text to be typed (use \r for Enter)
-//   vdp, cpu               : the raw emscripten module handles
+//   writeFile(path, bytes)     : put a Uint8Array onto the emulated sdcard
+//   typeText(text)             : queue text to be typed (use \r for Enter)
+//   runProgram(files, commands): write files + an autoexec.txt of MOS CLI
+//                                lines, then cold-boot — MOS executes the
+//                                script itself at startup. Deterministic:
+//                                no synthetic keyboard input, no waiting
+//                                for a prompt.
+//   coldBoot()                 : re-init the CPU/MOS (VDP keeps running;
+//                                the rebooting MOS re-handshakes it)
+//   vdp, cpu                   : the raw emscripten module handles
 
 // KeyboardEvent.code -> PS/2 scancode set 2 make code (0xE0xx = extended)
 const PS2_CODES = {
@@ -215,6 +222,24 @@ async function startAgon(opts) {
   }
   requestAnimationFrame(blit);
 
+  const coldBoot = () => {
+    // drain stale VDP->CPU bytes so the fresh MOS doesn't read leftovers
+    // from the previous session's uart stream
+    while (vdp._web_recv() >= 0) { /* drain */ }
+    cpu._agon_cpu_init(512);
+    log('cold boot');
+  };
+
+  // The native program-launch path: MOS runs /autoexec.txt at boot, one CLI
+  // command per line. Writing the program + script and rebooting makes MOS
+  // do the launch itself — immune to keyboard timing and tab throttling.
+  const runProgram = (files, commands) => {
+    for (const f of (files || [])) writeFile(f.path, f.bytes);
+    const script = commands.join('\r\n') + '\r\n';
+    writeFile('autoexec.txt', new TextEncoder().encode(script));
+    coldBoot();
+  };
+
   if (opts.onReady) opts.onReady();
-  return { writeFile, typeText, vdp, cpu };
+  return { writeFile, typeText, runProgram, coldBoot, vdp, cpu };
 }
