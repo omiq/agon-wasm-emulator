@@ -76,6 +76,7 @@ GPL-3.0, the same as fab-agon-emulator. See [LICENSE](LICENSE).
 
 This project is a thin layer over other people's work:
 
-* [fab-agon-emulator](https://github.com/tomm/fab-agon-emulator) and [vdp-gl](https://github.com/tomm/userspace-vdp-gl) by Tom Morton
+* [fab-agon-emulator](https://github.com/tomm/fab-agon-emulator) by Tom Morton, including the [userspace vdp-gl fork](https://github.com/tomm/userspace-vdp-gl) that replaces the ESP32 hardware layer so an emulator can drive it
+* [vdp-gl](https://github.com/AgonPlatform/vdp-gl), the Agon Platform fork of FabGL: the work on top of FabGL is mostly by Steve Sims and the Agon Platform contributors
 * [agon-vdp](https://github.com/AgonPlatform/agon-vdp) and [MOS](https://github.com/AgonPlatform/agon-mos) by Dean Belfield, Steve Sims and the Agon Platform contributors
 * [FabGL](https://github.com/fdivitto/FabGL), which vdp-gl descends from, by Fabrizio Di Vittorio
