@@ -9,6 +9,16 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 PORT = 8842
 
+# the wasm modules are build artifacts, not checked in: catch the missing-build
+# case here instead of letting the page die with 404s and "createVDP is not defined"
+MISSING = [f for f in ('vdp.js', 'vdp.wasm', 'cpu.js', 'cpu.wasm') if not os.path.exists(f)]
+if MISSING:
+    raise SystemExit(
+        f"missing build artifacts: {', '.join(MISSING)}\n"
+        "Run ./build.sh first (needs Emscripten + Rust, see README), or download\n"
+        "prebuilt files from the GitHub releases page and drop them in this directory."
+    )
+
 class H(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header('Cross-Origin-Opener-Policy', 'same-origin')

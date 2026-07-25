@@ -15,6 +15,23 @@ Two WebAssembly modules run on the page, mirroring the chips in the real machine
 
 On real hardware the two processors talk over a serial UART. Here that link is a few lines of JavaScript passing bytes between the two modules (`uart_lib.js` plus the glue in `index.html`). The MOS firmware and the SD card contents live in Emscripten's in-memory filesystem, so the host page can drop files onto the card with a single `FS.writeFile` call. That is how the IDE uses to execute cimpiled programs.
 
+## Quick start (prebuilt, no toolchains)
+
+The wasm modules are build artifacts and are not checked into the repo, so a plain clone will not run (the page dies with 404s on `vdp.js` and `cpu.js`, and `FATAL: createVDP is not defined` in the console). If you don't want to install Emscripten and Rust, grab the prebuilt files instead:
+
+```
+git clone --recursive https://github.com/omiq/agon-wasm-emulator
+cd agon-wasm-emulator
+```
+
+Then download `vdp.js`, `vdp.wasm`, `cpu.js` and `cpu.wasm` from the [latest release](https://github.com/omiq/agon-wasm-emulator/releases/latest) into the repo root, and:
+
+```
+python3 serve.py
+```
+
+The `--recursive` matters either way: the MOS firmware and the emulated SD card contents are fetched from the `fab-agon-emulator` submodule at runtime.
+
 ## Building
 
 Prerequisites:
