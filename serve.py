@@ -27,6 +27,9 @@ class H(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
 
 if __name__ == '__main__':
+    # without this, restarting right after Ctrl-C fails with
+    # "Address already in use" while the old socket sits in TIME_WAIT
+    socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(('127.0.0.1', PORT), H) as httpd:
         print(f'serving on http://127.0.0.1:{PORT}')
         httpd.serve_forever()
