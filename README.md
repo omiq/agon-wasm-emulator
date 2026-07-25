@@ -59,6 +59,43 @@ bin/bbcbasic demos/fireworks.bas
 
 A note on hosting: the VDP module uses pthreads, which need `SharedArrayBuffer`, which browsers only allow on cross-origin isolated pages. `serve.py` sends the required `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers for local use. If you host this anywhere else, your server must send the same two headers.
 
+## Getting files on and off the SD card
+
+The emulated SD card is not a live view of a folder on your server. It is an in-memory Emscripten filesystem that starts empty, and every file on it was put there explicitly. A browser cannot list the contents of a directory over HTTP, so there is no auto-mount: the files you see at boot are the ones named in the `sdFiles` list in `index.html`, each fetched from the web server and written onto the card.
+
+To serve your own files, drop them somewhere under the repo directory and add a line per file:
+
+```js
+sdFiles: [
+  { path: 'bin/bbcbasic.bin', url: 'fab-agon-emulator/sdcard/bin/bbcbasic.bin' },
+  { path: 'demos/myprog.bas', url: 'my-files/myprog.bas' },
+],
+```
+
+`path` is where it lands on the card, `url` is where it is fetched from (relative to the page).
+
+For files you want to move in and out while the emulator is running, `index.html` has a small toolbar under the screen:
+
+* **Choose Files** uploads from your machine onto the card root. MOS sees the file immediately, no reboot needed, so you can upload a program and `dir` will show it at the prompt.
+* **download** saves a file from the card to your machine. Type the card path (`demos/cube.bas`, with or without a leading `/sdcard/`) and click the button.
+* **list sdcard** prints every file on the card with its size, handy for finding the exact path to download.
+
+Under the hood these are a few lines each, so the same trick works from your own page or the console:
+
+```js
+// write: bytes onto the card (creates parent directories for you)
+agon.writeFile('demos/prog.bas', new Uint8Array(await file.arrayBuffer()));
+
+// read: raw Emscripten FS handle, then a Blob and a click to save it
+const bytes = agon.cpu.FS.readFile('/sdcard/demos/prog.bas');
+const a = document.createElement('a');
+a.href = URL.createObjectURL(new Blob([bytes]));
+a.download = 'prog.bas';
+a.click();
+```
+
+Two things to keep in mind. BBC BASIC's text loader wants CRLF line endings, and the upload button passes your file through untouched, so a Unix-style `.bas` file may need converting first (the postMessage API below normalises strings for you). And because the card lives in memory, anything you `SAVE` inside the emulator is gone when the page reloads. The download button is how you rescue work first.
+
 ## Embedding in another page (IDE use)
 
 `embed.html` is a minimal build of the emulator with a postMessage API, made for iframes. `ide-demo.html` is a working example of the flow. edit a BBC BASIC program in a textarea, click run, and it executes in the emulator next to it.
