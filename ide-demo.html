@@ -47,7 +47,7 @@ document.getElementById('run').addEventListener('click', () => {
   emu.contentWindow.postMessage({
     type: 'agon-run',
     files: [{ path: 'demos/ide.bas', data: src }],
-    command: 'bin/basic demos/ide.bas',
+    command: 'bin/bbcbasic demos/ide.bas',
   }, '*');
   log(ready ? 'sent program to emulator' : 'queued (emulator still booting)');
 });

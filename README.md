@@ -55,6 +55,21 @@ dir
 bin/bbcbasic demos/fireworks.bas
 ```
 
+### Which BBC BASIC
+
+Two interpreters ship on the card. `bin/bbcbasic` is BBC BASIC (Z80) version 3
+(R.T. Russell 1987, Dean Belfield's Agon port), and it is what the demos and the
+examples in this README assume.
+
+`bin/basic` is BBC BASIC (eZ80) version 5.0, Jeroen Venema's ADL build, included
+as an option. It is a newer dialect with `WHILE...ENDWHILE`, `CASE`, and the rest
+of the BASIC V additions, and it runs in 24-bit ADL mode rather than in the 64K
+Z80 address space. Because BASIC V adds keywords, older programs can break on it
+in a way that is easy to misread: a variable whose name begins with a new keyword
+is tokenised as that keyword. `demos/cube.bas` is a live example, its `FILLED%`
+parses as `FILL ED%` and the program stops with "No such variable". Rename such
+variables if you want to run older code under version 5.
+
 `build.sh` applies a patch (in `patches/`) to the fab-agon-emulator submodule. It adds a cooperative stepping API to the AgonMachine struct so the CPU can be driven from the browser's frame loop instead of a blocking thread. Nothing else in upstream is modified.
 
 A note on hosting: the VDP module uses pthreads, which need `SharedArrayBuffer`, which browsers only allow on cross-origin isolated pages. `serve.py` sends the required `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers for local use. If you host this anywhere else, your server must send the same two headers.
