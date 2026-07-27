@@ -33,6 +33,7 @@ const canvas = document.getElementById('screen');
 startAgon({
   canvas,
   sdFiles: [
+    { path: 'bin/basic.bin', url: 'assets/bin/basic.bin' },
     { path: 'bin/bbcbasic.bin', url: 'fab-agon-emulator/sdcard/bin/bbcbasic.bin' },
     { path: 'demos/fireworks.bas', url: 'fab-agon-emulator/sdcard/demos/fireworks.bas' },
     { path: 'demos/cube.bas', url: 'fab-agon-emulator/sdcard/demos/cube.bas' },
@@ -42,7 +43,7 @@ startAgon({
 }).then(api => {
   globalThis.agon = api;
   canvas.focus();
-  log('click the screen to type. try: bin/bbcbasic demos/fireworks.bas');
+  log('click the screen to type. try: bin/basic demos/fireworks.bas');
 
   document.getElementById('upload').addEventListener('change', async e => {
     for (const f of e.target.files) {

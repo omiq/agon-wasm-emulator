@@ -24,8 +24,8 @@
 //
 // Messages accepted (post to the iframe's contentWindow):
 //   {type:'agon-files', files:[{path:'demos/prog.bas', data:<ArrayBuffer|Uint8Array|string>}]}
-//   {type:'agon-type',  text:'bin/bbcbasic demos/prog.bas\r'}
-//   {type:'agon-run',   files:[...], command:'bin/bbcbasic demos/prog.bas'}
+//   {type:'agon-type',  text:'bin/basic demos/prog.bas\r'}
+//   {type:'agon-run',   files:[...], command:'bin/basic demos/prog.bas'}
 // Messages sent to the parent:
 //   {type:'agon-ready'}    modules loaded, MOS booting, input can be queued
 //   {type:'agon-log', msg} status lines
@@ -58,6 +58,7 @@ canvas.addEventListener('click', () => canvas.focus());
 startAgon({
   canvas,
   sdFiles: [
+    { path: 'bin/basic.bin', url: 'assets/bin/basic.bin' },
     { path: 'bin/bbcbasic.bin', url: 'fab-agon-emulator/sdcard/bin/bbcbasic.bin' },
   ],
   onLog: msg => parent.postMessage({ type: 'agon-log', msg }, '*'),
