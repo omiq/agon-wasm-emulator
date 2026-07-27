@@ -4,3 +4,6 @@ cpu.js
 cpu.wasm
 *.o
 agon-cpu-wasm/target/
+
+# local working notes, never published
+CLAUDE.md
