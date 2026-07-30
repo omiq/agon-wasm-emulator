@@ -9,16 +9,29 @@
   #log { white-space:pre-wrap; text-align:left; margin:1em auto; max-width:640px; font-size:12px; color:#8f8; }
   #files { margin:0.5em; }
   #files input, #files button { font-family:monospace; background:#333; color:#ddd; border:1px solid #555; padding:2px 6px; }
+  #hint { font-size:12px; color:#888; margin-top:0.4em; }
+  #links { font-size:13px; color:#888; margin:0.2em 0 1em; }
+  #links a { color:#8bf; }
 </style>
 </head>
 <body>
   <h1>Agon (eZ80 + VDP) in wasm</h1>
+  <p id="links">
+    <a href="ide-demo.html">editor demo</a>: write a BBC BASIC program and run it
+    &nbsp;|&nbsp;
+    <a href="embed.html">bare embed</a>: the iframe an editor page drives
+    <br>
+    <a href="https://github.com/omiq/agon-wasm-emulator">source</a>
+    &nbsp;|&nbsp;
+    built on <a href="https://github.com/tomm/fab-agon-emulator">fab-agon-emulator</a>
+  </p>
   <canvas id="screen" width="640" height="480" tabindex="0"></canvas>
   <div id="files">
     <input type="file" id="upload" multiple>
     <input type="text" id="dlpath" placeholder="path on sdcard, e.g. demos/cube.bas" size="34">
     <button id="download">download</button>
     <button id="list">list sdcard</button>
+    <div id="hint">or drop files anywhere on this page to copy them to the sdcard</div>
   </div>
   <div id="log"></div>
 
@@ -45,13 +58,41 @@ startAgon({
   canvas.focus();
   log('click the screen to type. try: bin/bbcbasic demos/fireworks.bas');
 
-  document.getElementById('upload').addEventListener('change', async e => {
-    for (const f of e.target.files) {
-      api.writeFile(f.name, new Uint8Array(await f.arrayBuffer()));
-      log('uploaded: /sdcard/' + f.name);
+  // MOS parses the command line on spaces, so a name with one in it cannot be
+  // launched from the prompt at all
+  const sdName = name => name.replace(/[^A-Za-z0-9._-]/g, '_');
+
+  const receive = async files => {
+    for (const f of files) {
+      const name = sdName(f.name);
+      try {
+        api.writeFile(name, new Uint8Array(await f.arrayBuffer()));
+      } catch (err) {
+        log('upload failed: ' + f.name + ' (' + (err.message || err) + ')');
+        continue;
+      }
+      log('uploaded: /sdcard/' + name + (name === f.name ? '' : ' (renamed from ' + f.name + ')'));
+      if (/\.bas$/i.test(name)) log('  run it with: bin/bbcbasic ' + name);
     }
-    e.target.value = '';
     canvas.focus();
+  };
+
+  document.getElementById('upload').addEventListener('change', async e => {
+    await receive(e.target.files);
+    e.target.value = '';
+  });
+
+  for (const type of ['dragenter', 'dragover']) {
+    document.addEventListener(type, e => {
+      e.preventDefault();
+      canvas.style.borderColor = '#8f8';
+    });
+  }
+  document.addEventListener('dragleave', () => { canvas.style.borderColor = '#555'; });
+  document.addEventListener('drop', async e => {
+    e.preventDefault();
+    canvas.style.borderColor = '#555';
+    await receive(e.dataTransfer.files);
   });
 
   document.getElementById('download').addEventListener('click', () => {
